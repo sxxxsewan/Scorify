@@ -1,23 +1,38 @@
 # Scorify
 
-Scorify is a local credit-default scoring project built around a LightGBM classifier and a FastAPI inference service. The model predicts the probability of serious delinquency within two years from the Give Me Some Credit dataset. The reported validation ROC-AUC is 0.866.
+Scorify — это проект локального кредитного скоринга, построенный на базе классификатора LightGBM и сервиса инференса FastAPI. Модель прогнозирует вероятность серьезной просрочки (дефолта) в течение двух лет по датасету Give Me Some Credit.
 
-## Project Structure
+## Стек технологий
+
+* **Язык программирования:** Python 3.11
+* **Machine Learning / Data Science:** LightGBM, PySpark, Pandas, NumPy, scikit-learn
+* **Backend & API:** FastAPI, Pydantic, Uvicorn
+* **Тестирование:** PyTest, HTTPX / TestClient
+* **Инфраструктура & DevOps:** Docker, Docker Compose, WSL 2 (Ubuntu)
+
+## Результаты и метрики
+
+* **Качество модели (ROC-AUC):** `0.866` (на кросс-валидации / OOF).
+* **Порог принятия решений:** Вероятность дефолта $< 0.30$ — `APPROVED` (одобрено), $\ge 0.30$ — `REJECTED` (отклонено).
+* **Offline/Online Alignment:** Интеграционные тесты подтверждают полное соответствие между офлайн-пайплайном ETL и онлайн-запросами к FastAPI (погрешность предсказаний $\le 0.05$).
+* **Тестирование:** Полный набор тестов (`pytest`) успешно пройден (`4 passed`), включая проверку эндпоинтов здоровья (`/health`), контрактов `/predict` и стабильности фич.
+
+## Структура проекта
 
 ```text
-app/                  FastAPI service and request/response schemas
-data/raw/             Source training and test CSV files
-data/processed/       Prepared feature parquet files and submission
-models/               Serialized LightGBM model
-notebooks/            Exploratory analysis and pipeline notebooks
-src/features/         Training-data feature construction
-src/models/           Model training and batch inference scripts
-tests/                API and offline/online alignment tests
+app/                 FastAPI сервис и схемы запросов/ответов
+data/raw/            Исходные тренировочные и тестовые CSV-файлы
+data/processed/      Подготовленные parquet-файлы с признаками и сабмит
+models/              Сериализованная модель LightGBM
+notebooks/           Разведочный анализ данных и ноутбуки пайплайна
+src/features/        Построение признаков для обучающих данных
+src/models/          Скрипты обучения модели и пакетного инференса
+tests/               API-тесты и проверка offline/online alignment
 ```
 
-## Local Setup
+## Локальный запуск
 
-Use Python 3.11 for the same runtime as the production container.
+Используйте Python 3.11 для обеспечения того же рантайма, что и в продакшен-контейнере.
 
 ```powershell
 python -m venv .venv
@@ -26,17 +41,17 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-The inference service expects `models/lightgbm_model.pkl` at the project-relative path. Start the API from the project root:
+Сервис инференса ожидает файл `models/lightgbm_model.pkl` по относительному пути от корня проекта. Запустите API из корня проекта:
 
 ```powershell
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-The health endpoint is `GET http://localhost:8000/health`; interactive API documentation is available at `http://localhost:8000/docs`.
+Эндпоинт проверки здоровья: `GET http://localhost:8000/health`; интерактивная документация API доступна по адресу `http://localhost:8000/docs`.
 
-## Prediction API
+## Предиктивный API
 
-Send the ten source attributes to `POST /predict`. Both the original hyphenated delinquency column names and the underscore variants used by the tests are accepted.
+Отправьте десять исходных атрибутов на адрес `POST /predict`. Принимаются как оригинальные наименования колонок с дефисами (из датасета), так и варианты с подчеркиваниями, используемые в тестах.
 
 ```json
 {
@@ -53,7 +68,7 @@ Send the ten source attributes to `POST /predict`. Both the original hyphenated 
 }
 ```
 
-Example response:
+Пример ответа:
 
 ```json
 {
@@ -62,50 +77,24 @@ Example response:
 }
 ```
 
-The API derives the five engineered model features from the request. A score below 0.30 is `APPROVED`; a score at or above 0.30 is `REJECTED`. Missing monthly income is represented by a 5400.0 fallback and a missingness indicator; missing dependents use 0.0 and their own indicator. These defaults are service fallbacks, while the training feature pipeline imputes income using age-decile medians, so missing-value predictions may not exactly match offline preprocessing. The alignment test deliberately compares rows where these two fields are present.
+API вычисляет пять созданных моделью признаков из запроса. Оценка ниже 0.30 получает статус `APPROVED`; оценка 0.30 и выше — `REJECTED`. Отсутствующий ежемесячный доход заменяется дефолтным значением 5400.0 с флагом пропуска; для отсутствующих иждивенцев используется 0.0 и собственный флаг. Эти дефолтные значения являются сервисными фоллбэками, в то время как пайплайн обучения заполняет пропуски медианами по децилям возраста, поэтому предсказания для пропущенных значений могут незначительно отличаться от офлайн-предобработки. Тест выравнивания (alignment test) намеренно сравнивает строки, где оба этих поля присутствуют.
 
-## Tests
+## Тесты
 
-Run the API contract checks and sampled offline/online comparison from the project root:
+Запустите проверку контрактов API и выборочное офлайн/онлайн-сравнение из корня проекта:
 
 ```powershell
 pytest tests/ -v
 ```
 
-The alignment test samples complete source rows, matches each row to `data/processed/features.parquet`, and verifies that its direct model probability differs from the API probability by no more than 0.05.
+Тест выравнивания берет полные исходные строки, сопоставляет каждую строку с `data/processed/features.parquet` и проверяет, что вероятность прямой модели отличается от вероятности API не более чем на 0.05.
 
-## Docker and WSL
+## Docker и WSL
 
-The production image contains the API and serialized model; test files and datasets are mounted only by the Compose test service. Build and run the API:
+Продакшен-образ содержит API и сериализованную модель; тестовые файлы и датасеты подключаются (монтируются) только тестовым сервисом Compose. 
 
-```bash
-docker compose up --build -d api
-curl http://localhost:8000/health
-```
+Остановить API можно командой `docker compose down`. Если сборка образа сталкивается с проблемами сети при загрузке пакетов, проверьте настройки прокси или сетевого доступа. API станет доступен на порту 8000.
 
-Run the API and offline/online tests inside a disposable container:
+## Переобучение модели
 
-```bash
-docker compose --profile test run --build --rm tests
-```
-
-Stop the API with `docker compose down`.
-
-WSL needs the project to be on a drive mounted under `/mnt`. Google Drive `G:` is not mounted in the current Ubuntu WSL distribution. Copy the project from Windows PowerShell to a mounted local drive, then run Compose from Ubuntu:
-
-```powershell
-robocopy "G:\Мой диск\scorify" "$env:USERPROFILE\scorify" /E /XD .git .pytest_cache __pycache__
-```
-
-```bash
-cd /mnt/c/Users/<WindowsUser>/scorify
-docker compose --profile test run --build --rm tests
-docker compose up --build -d api
-curl http://localhost:8000/health
-```
-
-Replace `<WindowsUser>` with the Windows profile directory name. If the image build cannot reach Debian package repositories to install `libgomp1`, configure the Docker/WSL network proxy or allow outbound access, then rerun the build. The API becomes available on port 8000.
-
-## Rebuilding the Model
-
-`src/features/build_features.py` creates the training parquet with missingness flags and derived credit features. `src/models/train_model.py` fits the LightGBM classifier and writes `models/lightgbm_model.pkl`; `src/models/predict_model.py` runs batch inference for the test dataset. The scripts currently contain Google Drive paths from the original notebook workflow and need those paths adapted to the local environment before running them outside that workflow.
+Скрипт `src/features/build_features.py` создает тренировочный parquet-файл с флагами пропусков и созданными кредитными признаками. `src/models/train_model.py` обучает классификатор LightGBM и сохраняет файл `models/lightgbm_model.pkl`; `src/models/predict_model.py` запускает пакетный инференс для тестового датасета. Скрипты содержат пути Google Диска из оригинального пайплайна блокнотов и требуют адаптации под локальное окружение перед запуском вне этой среды.
