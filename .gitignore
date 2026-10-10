@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+mlruns/
+mlflow_registry.db
+dvc_storage/
+data/processed/
+models/lightgbm_model.pkl
+mlflow.db
+mlruns/
+backup/

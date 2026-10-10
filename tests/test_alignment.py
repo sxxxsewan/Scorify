@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
@@ -8,6 +9,7 @@ if PROJECT_ROOT not in sys.path:
 import joblib
 import numpy as np
 import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import FEATURE_COLUMNS, app
@@ -33,9 +35,17 @@ RAW_FEATURE_COLUMNS = [
 client = TestClient(app)
 
 
+@pytest.mark.skipif(
+    not all(Path(path).exists() for path in (RAW_PATH, FEATURES_PATH, MODEL_PATH)),
+    reason="DVC data and model artifacts are not present; restore them with DVC",
+)
 def test_online_predictions_match_processed_features():
     raw_data = pd.read_csv(RAW_PATH)
-    processed_data = pd.read_parquet(FEATURES_PATH)
+    parquet_files = list(Path(FEATURES_PATH).glob("*.parquet"))
+    processed_data = pd.concat(
+        [pd.read_parquet(parquet_file) for parquet_file in parquet_files],
+        ignore_index=True,
+    )
     model = joblib.load(MODEL_PATH)
 
     eligible_rows = raw_data.dropna(subset=RAW_FEATURE_COLUMNS)

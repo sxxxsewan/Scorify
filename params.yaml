@@ -1,0 +1,32 @@
+paths:
+  raw_train: data/raw/cs-training.csv
+  raw_test: data/raw/cs-test.csv
+  features: data/processed/features.parquet
+  test_features: data/processed/test_features.parquet
+  model: models/lightgbm_model.pkl
+  metrics: metrics.json
+  submission: data/processed/submission.csv
+  mlflow_registry_db: mlflow_registry.db
+
+features:
+  null_value: "NA"
+  spark_driver_memory: 4g
+  dependents_median_quantile: 0.5
+  dependents_quantile_error: 0.01
+  age_group_count: 10
+  income_median_quantile: 0.5
+
+training:
+  test_size: 0.2
+  cv_splits: 5
+  random_state: 42
+  early_stopping_rounds: 50
+  model_registry_name: scorify-lgbm
+
+lightgbm:
+  n_estimators: 1000
+  learning_rate: 0.03
+  num_leaves: 31
+  random_state: 42
+  verbose: -1
+  n_jobs: -1

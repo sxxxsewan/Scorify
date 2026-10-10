@@ -1,0 +1,71 @@
+schema: '2.0'
+stages:
+  build_features:
+    cmd: python src/features/build_features.py
+    deps:
+    - path: data/raw/cs-training.csv
+      hash: md5
+      md5: cce525a1d41f234f58d3bb52f3d2516b
+      size: 7564965
+    - path: src/features/build_features.py
+      hash: md5
+      md5: 7c6745d5b63c4694a6f90b0a4e355300
+      size: 3041
+    params:
+      params.yaml:
+        features:
+          null_value: NA
+          spark_driver_memory: 4g
+          dependents_median_quantile: 0.5
+          dependents_quantile_error: 0.01
+          age_group_count: 10
+          income_median_quantile: 0.5
+        paths.features: data/processed/features.parquet
+        paths.raw_train: data/raw/cs-training.csv
+    outs:
+    - path: data/processed/features.parquet
+      hash: md5
+      md5: 70d8dc7081f60c0e8c17ba7354495b34.dir
+      size: 4821516
+      nfiles: 4
+  train:
+    cmd: python src/models/train_model.py
+    deps:
+    - path: data/processed/features.parquet
+      hash: md5
+      md5: 70d8dc7081f60c0e8c17ba7354495b34.dir
+      size: 4821516
+      nfiles: 4
+    - path: src/models/train_model.py
+      hash: md5
+      md5: 2cc871dfa9c0110a3e146bfc23e4ce86
+      size: 4814
+    params:
+      params.yaml:
+        lightgbm:
+          n_estimators: 1000
+          learning_rate: 0.03
+          num_leaves: 31
+          random_state: 42
+          verbose: -1
+          n_jobs: -1
+        paths.features: data/processed/features.parquet
+        paths.metrics: metrics.json
+        paths.mlflow_registry_db: mlflow_registry.db
+        paths.model: models/lightgbm_model.pkl
+        paths.raw_train: data/raw/cs-training.csv
+        training:
+          test_size: 0.2
+          cv_splits: 5
+          random_state: 42
+          early_stopping_rounds: 50
+          model_registry_name: scorify-lgbm
+    outs:
+    - path: metrics.json
+      hash: md5
+      md5: fadf007cf548115fa8f58af1c6dc56e7
+      size: 80
+    - path: models/lightgbm_model.pkl
+      hash: md5
+      md5: bd32ac91581cd2e4bce2559622cf81b6
+      size: 598996

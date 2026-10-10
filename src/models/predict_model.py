@@ -1,26 +1,32 @@
-import os
+from pathlib import Path
+
 import joblib
 import pandas as pd
 import numpy as np
+import yaml
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType
 from pyspark.sql.window import Window
 
-# 1. Пути к файлам
-RAW_TEST_PATH = "/content/drive/MyDrive/scorify/data/raw/cs-test.csv"
-PROCESSED_TEST_PATH = "/content/drive/MyDrive/scorify/data/processed/test_features.parquet"
-MODEL_PATH = "/content/drive/MyDrive/scorify/models/lightgbm_model.pkl"
-SUBMISSION_PATH = "/content/drive/MyDrive/scorify/data/processed/submission.csv"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+with (PROJECT_ROOT / "params.yaml").open(encoding="utf-8") as config_file:
+    CONFIG = yaml.safe_load(config_file)
 
 def process_test_data():
+    paths = CONFIG["paths"]
     print("Обработка тестовых данных через PySpark...")
     spark = SparkSession.builder \
         .appName("CreditScoringTestPreprocess") \
-        .config("spark.driver.memory", "4g") \
+        .config("spark.driver.memory", CONFIG["features"]["spark_driver_memory"]) \
         .getOrCreate()
 
-    df = spark.read.csv(RAW_TEST_PATH, header=True, inferSchema=True, nullValue="NA")
+    df = spark.read.csv(
+        str(PROJECT_ROOT / paths["raw_test"]),
+        header=True,
+        inferSchema=True,
+        nullValue=CONFIG["features"]["null_value"],
+    )
 
     for col in df.columns:
         df = df.withColumnRenamed(col, col.strip())
@@ -35,15 +41,30 @@ def process_test_data():
         .withColumn("MonthlyIncome_isna", F.when(F.col("MonthlyIncome").isNull(), 1).otherwise(0)) \
         .withColumn("NumberOfDependents_isna", F.when(F.col("NumberOfDependents").isNull(), 1).otherwise(0))
 
-    median_deps = df.approxQuantile("NumberOfDependents", [0.5], 0.01)[0]
+    median_deps = df.approxQuantile(
+        "NumberOfDependents",
+        [CONFIG["features"]["dependents_median_quantile"]],
+        CONFIG["features"]["dependents_quantile_error"],
+    )[0]
     if median_deps is None:
         median_deps = 0.0
 
     df = df.fillna({"NumberOfDependents": median_deps})
 
-    df = df.withColumn("AgeGroup", F.ntile(10).over(Window.orderBy("age")))
+    df = df.withColumn(
+        "AgeGroup",
+        F.ntile(CONFIG["features"]["age_group_count"]).over(
+            Window.orderBy("age")
+        ),
+    )
     window_age = Window.partitionBy("AgeGroup")
-    df = df.withColumn("Median_Income_AgeGroup", F.expr("percentile_approx(MonthlyIncome, 0.5)").over(window_age))
+    income_median_quantile = CONFIG["features"]["income_median_quantile"]
+    df = df.withColumn(
+        "Median_Income_AgeGroup",
+        F.expr(f"percentile_approx(MonthlyIncome, {income_median_quantile})").over(
+            window_age
+        ),
+    )
     df = df.withColumn("MonthlyIncome", F.coalesce(F.col("MonthlyIncome"), F.col("Median_Income_AgeGroup"))).drop("AgeGroup", "Median_Income_AgeGroup")
 
     df = df \
@@ -60,14 +81,17 @@ def process_test_data():
         .withColumn("Monthly_Debt_Amount", 
                     F.col("MonthlyIncome") * F.col("DebtRatio"))
 
-    os.makedirs("/content/drive/MyDrive/scorify/data/processed", exist_ok=True)
-    df.write.mode("overwrite").parquet(PROCESSED_TEST_PATH)
+    processed_test_path = PROJECT_ROOT / paths["test_features"]
+    processed_test_path.parent.mkdir(parents=True, exist_ok=True)
+    df.write.mode("overwrite").parquet(str(processed_test_path))
+    spark.stop()
     print("Тестовые данные успешно обработаны и сохранены")
 
 def make_predictions():
+    paths = CONFIG["paths"]
     print("Загрузка модели и подготовленных данных...")
-    model = joblib.load(MODEL_PATH)
-    df_test = pd.read_parquet(PROCESSED_TEST_PATH)
+    model = joblib.load(PROJECT_ROOT / paths["model"])
+    df_test = pd.read_parquet(PROJECT_ROOT / paths["test_features"])
 
     if 'SeriousDlqin2yrs' in df_test.columns:
         X_test = df_test.drop(columns=['SeriousDlqin2yrs'])
@@ -82,8 +106,10 @@ def make_predictions():
         'Probability': preds
     })
 
-    sub.to_csv(SUBMISSION_PATH, index=False)
-    print(f"Предсказания успешно сохранены в {SUBMISSION_PATH}")
+    submission_path = PROJECT_ROOT / paths["submission"]
+    submission_path.parent.mkdir(parents=True, exist_ok=True)
+    sub.to_csv(submission_path, index=False)
+    print(f"Предсказания успешно сохранены в {submission_path}")
 
 if __name__ == "__main__":
     process_test_data()

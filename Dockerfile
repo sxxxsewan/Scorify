@@ -12,7 +12,7 @@ RUN apt-get update \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
-COPY models/lightgbm_model.pkl ./models/lightgbm_model.pkl
+COPY models/ ./models/
 
 EXPOSE 8000
 

@@ -1,11 +1,16 @@
 import os
 import sys
+from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+MODEL_PATH = Path(PROJECT_ROOT) / "models" / "lightgbm_model.pkl"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)
@@ -15,6 +20,10 @@ def test_health():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
+@pytest.mark.skipif(
+    not MODEL_PATH.exists(),
+    reason="DVC model artifact is not present; restore it with DVC",
+)
 def test_predict_approved():
     payload = {
         "RevolvingUtilizationOfUnsecuredLines": 0.05,
@@ -35,6 +44,10 @@ def test_predict_approved():
     assert 0.0 <= data["default_probability"] <= 1.0
     assert data["decision"] == "APPROVED"
 
+@pytest.mark.skipif(
+    not MODEL_PATH.exists(),
+    reason="DVC model artifact is not present; restore it with DVC",
+)
 def test_predict_high_risk():
 
     payload = {

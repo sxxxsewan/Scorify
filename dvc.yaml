@@ -1,0 +1,32 @@
+stages:
+  build_features:
+    cmd: python src/features/build_features.py
+    deps:
+      - data/raw/cs-training.csv
+      - src/features/build_features.py
+    params:
+      - params.yaml:
+          - paths.raw_train
+          - paths.features
+          - features
+    outs:
+      - data/processed/features.parquet
+  train:
+    cmd: python src/models/train_model.py
+    deps:
+      - data/processed/features.parquet
+      - src/models/train_model.py
+    params:
+      - params.yaml:
+          - paths.raw_train
+          - paths.features
+          - paths.model
+          - paths.metrics
+          - paths.mlflow_registry_db
+          - training
+          - lightgbm
+    outs:
+      - models/lightgbm_model.pkl
+    metrics:
+      - metrics.json:
+          cache: false
