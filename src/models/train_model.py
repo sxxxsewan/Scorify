@@ -3,14 +3,14 @@ import os
 from pathlib import Path
 
 import joblib
-import pandas as pd
-import numpy as np
 import lightgbm as lgb
 import mlflow
 import mlflow.lightgbm
+import numpy as np
+import pandas as pd
 import yaml
-from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 with (PROJECT_ROOT / "params.yaml").open(encoding="utf-8") as config_file:
