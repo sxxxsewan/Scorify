@@ -1,0 +1,7 @@
+**
+!app/
+!app/**
+!models/
+!models/lightgbm_model.pkl
+!requirements.txt
+!Dockerfile

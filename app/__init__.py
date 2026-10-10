@@ -1,0 +1,1 @@
+"""Credit scoring inference service."""
