@@ -1,4 +1,4 @@
-# Scorify 💳
+# Scorify
 
 ![CI Build](https://github.com/scorify/scorify/actions/workflows/ci.yml/badge.svg)
 ![Python Version](https://img.shields.io/badge/python-3.11-blue.svg)
